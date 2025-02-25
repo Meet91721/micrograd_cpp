@@ -3,139 +3,153 @@
 #include <vector>
 #include <functional>
 #include <iostream>
+#include <numeric>
+#include <cstdlib>
+#include <cassert>
 
+class Value;
 
 class valueData{
 
 public:
-    double data;
-    std::string label;
-    std::vector<std::shared_ptr<valueData>> children;
-    double grad;
-    std::function<void()>_backward;
-    std::string op;
+	double *data;
+	int total_size;
+	std::vector<int> shape;
+	std::string label;
+	std::vector<std::shared_ptr<valueData>> children;
+	double *grad;
+	std::function<void()>_backward;
+	std::string op;
 
-    /* default constructor */
-    valueData() = default;
+	/* explicitly deleting the default constructor */
+	valueData() = delete;
 
-    /* main constructor */
-    valueData(double _data,std::string _label = "",std::vector<std::shared_ptr<valueData>> _children = {nullptr,nullptr},std::string _op = "",std::function<void()> __backward = nullptr):data(_data),label(std::move(_label)),children(std::move(_children)),op(std::move(_op)),_backward(__backward),grad(double(0.0)) {}
+	/* main constructor */
+	valueData(double _data,std::string _label = "",std::vector<std::shared_ptr<valueData>> _children = {},std::string _op = "",std::function<void()> __backward = nullptr):label(std::move(_label)),children(std::move(_children)),op(std::move(_op)),_backward(__backward) {
+		total_size = 1;
+		data = new double(_data);
+		grad = new double(0);
+		shape = {};
+	}
 
-    /* destructor */
-    ~valueData(){}
+	valueData(std::vector<int> _shape,std::string _label = "",std::vector<std::shared_ptr<valueData>> _children = {},std::string _op = "",std::function<void()> __backward = nullptr):label(std::move(_label)),children(std::move(_children)),op(std::move(_op)),_backward(__backward) {
+		total_size = std::accumulate(_shape.begin(), _shape.end(), 1, std::multiplies<int>());
+		data = new double[total_size];
+		grad = new double[total_size];
+		shape = _shape;
+	}
+
+	/* destructor */
+	~valueData(){
+		delete data;
+		delete grad;
+	}
 };
 
-class Value
-{
+class Value{
 private:
-    inline static std::vector<std::shared_ptr<valueData>> tmpObjs;
+	inline static std::vector<std::shared_ptr<valueData>> tmpObjs;
 
 public:
-    std::shared_ptr<valueData> ptr;
+	std::shared_ptr<valueData> ptr;
 
-    /* explicitely defining the default constuctor */
-    Value() = default;
+	/* explicitly deleting the default constructor */
+	Value() = delete;
 
-    /* main constructor */
-    Value(double _data,std::string _label = "",std::vector<std::shared_ptr<valueData>> _children = {nullptr,nullptr},std::string _op = "",std::function<void()> __backward = nullptr){
-        ptr = std::make_shared<valueData>(_data,_label,_children,_op,__backward);
-    }
+	/* main constructor */
+	Value(double _data,std::string _label = "",std::vector<std::shared_ptr<valueData>> _children = {},std::string _op = "",std::function<void()> __backward = nullptr){
+		ptr = std::make_shared<valueData>(_data,_label,_children,_op,__backward);
+	}
 
-    /* move constructor */
-    Value(Value&& other){
-        this->ptr = other.ptr;
-        other.ptr.reset();
-    }
+	Value(std::vector<int> _shape,std::string _label = "",std::vector<std::shared_ptr<valueData>> _children = {},std::string _op = "",std::function<void()> __backward = nullptr){
+		ptr = std::make_shared<valueData>(_shape,_label,_children,_op,__backward);
+	}
 
-    // copy constructor
-    Value(const Value& other){
-        this->ptr = std::make_shared<valueData>(*(other.ptr));
-    }
+	/* move constructor */
+	Value(Value&& other){
+		this->ptr = other.ptr;
+		other.ptr.reset();
+	}
 
-    /* assignment copy constructor */
-    Value& operator=(const Value& other){
-        if(this != &other){
-            std::cout << "assignment operator called\n";
-            if(this->ptr != nullptr){
-                Value::tmpObjs.push_back(this->ptr);
-            }
-            this->ptr = other.ptr;
-        }
-        return *this;
-    }
+	// copy constructor
+	Value(const Value& other){
+		// Making changes following pytorch's psychology
+		this->ptr = other.ptr;
+	}
 
-    /* assignment move constructor */
-    Value operator=(Value&& other) noexcept {
-        if(this != &other){
-            std::cout << "assignment move constructor called\n";
-            if(this->ptr != nullptr){
-                Value::tmpObjs.push_back(this->ptr);
-            }
-            this->ptr = other.ptr;
-            other.ptr.reset();
-        }
-        return *this;
-    }
+	/* assignment copy constructor */
+	Value& operator=(const Value& other){
+		if(this != &other){
+			if(this->ptr != nullptr){
+				Value::tmpObjs.push_back(this->ptr);
+			}
+			this->ptr = other.ptr;
+		}
+		return *this;
+	}
 
-    /* destructor */
-    ~Value(){}
+	/* assignment move constructor */
+	Value& operator=(Value&& other) noexcept {
+		if(this != &other){
+			if(this->ptr != nullptr){
+				Value::tmpObjs.push_back(this->ptr);
+			}
+			this->ptr = other.ptr;
+			other.ptr.reset();
+		}
+		return *this;
+	}
 
-    /* getter functions */
+	Value operator=(double data) {
+		assert(this->ptr->shape.size() == 0 && "Shape conflict");
+		*(this->ptr->data) = data;
+		return *this;
+	}
 
-    double getdata(){
-        return this->ptr->data;
-    }
+	/* destructor */
+	~Value(){}
 
-    double getGrad(){
-        return this->ptr->grad;
-    }
+	/* getter functions */
+	double* getdata(){
+		return this->ptr->data;
+	}
 
-    /* for printing the Value object (right now implemented by overloading the ostream << operator)*/
-    friend std::ostream& operator<<(std::ostream&, Value&) noexcept;
+	double* getGrad(){
+		return this->ptr->grad;
+	}
 
-    /* backward function */
-    void backward(){
+	/* for printing the Value object (right now implemented by overloading the ostream << operator)*/
+	friend std::ostream& operator<<(std::ostream&, Value&) noexcept;
 
-        this->ptr->grad = 1.0;
-        std::queue<std::shared_ptr<valueData>> q;
+	/* for printing the Value object (right now implemented by overloading the ostream << operator)*/
+	friend std::ostream& operator<<(std::ostream&, Value&&) noexcept;
 
-        q.push(std::make_shared<valueData>(*(this->ptr)));
+	/* backward function */
+	void backward();
 
-        while(!q.empty()){
-            std::shared_ptr<valueData> top_child = q.front();
-            q.pop();
+	// addition
+	Value operator+(Value&);
+	Value operator+(double);
+	friend Value operator+(double, Value&);
 
-            if(top_child->_backward != nullptr){
-                top_child->_backward();
+	// multiplication
+	Value operator*(Value&);
+	Value operator*(double);
+	friend Value operator*(double, Value&);
 
-                for(auto child: top_child->children){
-                    if(child != nullptr){
-                        q.push(child);
-                    }
-                }
-            }
-        }
-    }
+	// substraction
+	Value operator-(Value&);
+	Value operator-(double);
+	friend Value operator-(double, Value&);
 
-    /* operation definitions for Value objects */
+	// division
+	Value operator/(Value&);
+	Value operator/(double);
+	friend Value operator/(double, Value&);
 
-    // addition
-    Value operator+(Value&);
-    Value operator+(double);
-    friend Value operator+(double, Value&);
-
-    // multiplication
-    Value operator*(Value&);
-    Value operator*(double);
-    friend Value operator*(double, Value&);
-
-    // substraction
-    Value operator-(Value&);
-    Value operator-(double);
-    friend Value operator-(double, Value&);
-
-    //power
-    Value operator^(Value&);
-    Value operator^(double);
-    friend Value operator^(double, Value&);
+	//power
+	Value operator^(Value&);
+	Value operator^(double);
+	friend Value operator^(double, Value&);
 };
+

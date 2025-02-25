@@ -1,5 +1,5 @@
 project(micrograd)
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.16)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # For making sure that compile_commands.json file is generated

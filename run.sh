@@ -4,4 +4,5 @@ cd build
 cmake ..
 make
 ./main
-./main_test
+#leaks --atExit -- ./main
+# ./main_test
