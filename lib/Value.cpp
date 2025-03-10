@@ -1,6 +1,8 @@
 #include "Value.h"
+#include <_strings.h>
 #include <algorithm>
 #include <cmath>
+#include <initializer_list>
 #include <iostream>
 #include <memory>
 
@@ -23,6 +25,68 @@ std::ostream &operator<<(std::ostream &out_stream, Value &&obj) noexcept {
 }
 
 /* operation definitions for Value objects */
+
+void iterator(std::vector<Selector> &indexes, int depth, int &index, int ori_index, int box_cap, std::vector<std::pair<int,int>> &res, std::vector<int> &ori_shape){
+
+	if(depth == indexes.size()){
+		// view.ptr->data[index++] = original.ptr->data[ori_index];
+		res.push_back({index++, ori_index});
+		return;
+	}
+	box_cap /= ori_shape[depth];
+	if(indexes[depth].isRange){
+		for(int i = indexes[depth].indexes[0]; i < indexes[depth].indexes[1]; i++){
+			int new_ori_index = ori_index + box_cap * i;
+			iterator(indexes, depth + 1, index, new_ori_index, box_cap, res, ori_shape);
+		}
+	}else{
+		for(int i = 0; i < indexes[depth].n_elements; i++){
+			int new_ori_index = ori_index + box_cap * indexes[depth].indexes[i];
+			std::cout << "Printing index here: " << indexes[depth].indexes[i] << " depth: " << box_cap << " " << new_ori_index << '\n';
+			iterator(indexes, depth + 1, index, new_ori_index, box_cap, res, ori_shape);
+		}
+	}
+}
+
+std::vector<std::pair<int,int>> viewCreator(Value &original, Value &view, std::vector<Selector> &indexes){
+
+	int n_elements = 1;
+	for(int i: original.ptr->shape){
+		n_elements *= i;
+	}
+	std::vector<std::pair<int,int>> res;
+	int index = 0;
+	iterator(indexes, 0, index, 0, n_elements, res, original.ptr->shape);
+	return res;
+}
+
+Value Value::operator()(std::vector<Selector> &&indexes){
+
+	assert(indexes.size() == this->ptr->shape.size() && "Incorrect shape demanded");
+	std::vector<int>shape;
+	for(int i = 0; i < indexes.size(); i++){
+		indexes[i].isValid(this->ptr->shape[i]);
+		shape.push_back(indexes[i].n_elements);
+	}
+	/*
+	int i = 0;
+	for(auto &index: indexes){
+		index.isValid(this->ptr->shape[i++]);
+		shape.push_back(index.n_elements);
+	}
+	*/
+	// Projection p = Projection(indexes, this->ptr->data);
+// Value(std::vector<int> _shape,std::string _label = "",std::vector<std::shared_ptr<valueData>> _children = {},std::string _op = "",std::function<void()> __backward = nullptr)
+	Value out = Value(shape);
+	std::vector<std::pair<int,int>> mappings = viewCreator(*this, out, indexes);
+	std::cout << "Here we go:\n";
+	/*
+	for(int i = 0; i < mappings.size(); i++){
+		std::cout << mappings[i].first << " " << mappings[i].second << '\n';
+		out.ptr->data+mappings[i].first = :
+	}*/
+	return out;
+}
 
 // addition
 Value Value::operator+(Value &other) {

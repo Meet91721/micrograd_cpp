@@ -1,10 +1,11 @@
 #pragma once
+#include <_strings.h>
+#include <initializer_list>
 #include <memory>
 #include <vector>
 #include <functional>
 #include <iostream>
 #include <numeric>
-#include <cstdlib>
 #include <cassert>
 
 class Value;
@@ -43,6 +44,111 @@ public:
 	~valueData(){
 		delete data;
 		delete grad;
+	}
+};
+
+struct Selector{
+	int *indexes;
+	int n_elements;
+	bool isRange;
+	Selector(int index){
+		indexes = new int[1];
+		indexes[0] = index;
+		n_elements = 1;
+		isRange = false;
+	}
+	Selector(std::initializer_list<int> range){
+		assert(range.size() == 2 && "Range only accepts the first and last element");
+		indexes = new int[2];
+		std::copy(range.begin(), range.end(), indexes);
+		n_elements = indexes[1] - indexes[0];
+		isRange = true;
+	}
+	Selector(int n, std::initializer_list<int> elems){
+		indexes = new int[n];
+		std::copy(elems.begin(), elems.end(), indexes);
+		n_elements = n;
+		isRange = false;
+	}
+	Selector(Selector &&sel) noexcept {
+		indexes = sel.indexes;
+		isRange = sel.isRange;
+		n_elements = sel.n_elements;
+		sel.indexes = nullptr;
+	}
+	Selector& operator()(Selector &&other) noexcept {
+		delete[] indexes;
+		indexes = other.indexes;
+		isRange = other.isRange;
+		n_elements = other.n_elements;
+		other.indexes = nullptr;
+		return *this;
+	}
+	Selector(const Selector &sel) noexcept : Selector(std::move(const_cast<Selector&>(sel))){
+	}
+	Selector& operator=(const Selector &other) noexcept {
+		return *this = std::move(const_cast<Selector&>(other));
+	}
+	void isValid(int mx) const{
+		if(n_elements == 1){
+			assert(*indexes < mx && "Tried accessing out of index element");
+		}
+		else if(isRange == true){
+			assert(indexes[0] < indexes[1] && "Start element must be lesser than the end index");
+			assert(indexes[1] < mx && "Tried accessing out of index element");
+		}
+		else{
+			for(int i = 0; i < n_elements; i++){
+				assert(indexes[i] < mx && "Tried accessing out of index element");
+			}
+		}
+	}
+	~Selector(){
+		delete[] indexes;
+	}
+};
+
+class Projection{
+public:
+	double *t;
+	int n_elements;
+	std::vector<int> shape;
+
+	void calculate_size(std::vector<Selector> &indices){
+		for(int i = 0; i < indices.size(); i++){
+			if(indices[i].isRange){
+				int elements = indices[i].indexes[1] - indices[i].indexes[0];
+				n_elements *= elements;
+				shape.push_back(elements);
+			}else{
+				int elements = n_elements;
+				n_elements += indices[i].n_elements;
+				shape.push_back(elements);
+			}
+		}
+	}
+
+	Projection(std::vector<Selector> &indices, double *ptr){
+		calculate_size(indices);
+		t = new double[n_elements];
+		// delete this in future
+		for(int i = 0; i < n_elements; i++){
+			t[i] = i;
+		}
+	}
+	
+	void printer(){
+		for(auto it: shape){
+			std::cout << it << " ";
+		}
+		std::cout << '\n';
+		for(int i = 0; i < n_elements; i++){
+			std::cout << t[i] << " ";
+		}
+	}
+
+	~Projection(){
+		delete t;
 	}
 };
 
@@ -118,6 +224,8 @@ public:
 		return this->ptr->grad;
 	}
 
+	Value operator()(std::vector<Selector> &&indexes);
+
 	/* for printing the Value object (right now implemented by overloading the ostream << operator)*/
 	friend std::ostream& operator<<(std::ostream&, Value&) noexcept;
 
@@ -152,4 +260,5 @@ public:
 	Value operator^(double);
 	friend Value operator^(double, Value&);
 };
+
 
