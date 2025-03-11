@@ -1,5 +1,4 @@
 #pragma once
-#include <_strings.h>
 #include <initializer_list>
 #include <memory>
 #include <vector>
@@ -12,8 +11,11 @@ class Value;
 
 class valueData{
 
-public:
+private:
 	double *data;
+	double **data_ptr;
+
+public:
 	int total_size;
 	std::vector<int> shape;
 	std::string label;
@@ -21,6 +23,7 @@ public:
 	double *grad;
 	std::function<void()>_backward;
 	std::string op;
+	bool isView;
 
 	/* explicitly deleting the default constructor */
 	valueData() = delete;
@@ -29,20 +32,84 @@ public:
 	valueData(double _data,std::string _label = "",std::vector<std::shared_ptr<valueData>> _children = {},std::string _op = "",std::function<void()> __backward = nullptr):label(std::move(_label)),children(std::move(_children)),op(std::move(_op)),_backward(__backward) {
 		total_size = 1;
 		data = new double(_data);
+		data_ptr = nullptr;
+		isView = false;
 		grad = new double(0);
 		shape = {};
 	}
 
-	valueData(std::vector<int> _shape,std::string _label = "",std::vector<std::shared_ptr<valueData>> _children = {},std::string _op = "",std::function<void()> __backward = nullptr):label(std::move(_label)),children(std::move(_children)),op(std::move(_op)),_backward(__backward) {
+	valueData(std::vector<int> _shape,std::string _label = "",std::vector<std::shared_ptr<valueData>> _children = {},std::string _op = "", bool isView = false,std::function<void()> __backward = nullptr):label(std::move(_label)),children(std::move(_children)),op(std::move(_op)),_backward(__backward),isView(isView) {
 		total_size = std::accumulate(_shape.begin(), _shape.end(), 1, std::multiplies<int>());
-		data = new double[total_size];
+		if(isView){
+			data = nullptr;
+			data_ptr = new double*[total_size];
+		}
+		else{
+			data = new double[total_size];
+			data_ptr = nullptr;
+		}
 		grad = new double[total_size];
 		shape = _shape;
+	}
+
+	double& operator[](int index){
+		if(isView){
+			return *data_ptr[index];
+		}
+		return data[index];
+	}
+
+	double* operator+(int index){
+		return this->data + index;
+	}
+
+	void equalOverloadHelper(std::vector<double> &data, int &index, int depth=0){
+		assert(this->shape[depth] == data.size() && "The shape does not match\n");
+		for(int i = 0; i < data.size(); i++){
+			(*this)[index++] = data[i];
+		}
+	}
+
+	template <typename T>
+	void equalOverloadHelper(std::vector<T> &data, int &index, int depth=0){
+		assert(this->shape[depth] == data.size() && "The shape does not match\n");
+		for(int i = 0; i < data.size(); i++){
+			equalOverloadHelper(data[i], index, depth+1);
+		}
+	}
+
+	void printerOverloadHelper(std::ostream &out_stream, int &index, int depth = 0){
+		if(depth+1 == this->shape.size()){
+			out_stream << std::string(depth, ' ') << std::string(depth, ' ') << "[ ";
+			for(int i = 0; i < this->shape[depth]; i++){
+				out_stream << (*this)[index++] << ",";
+			}
+			out_stream << "]," << std::string(depth, ' ') << std::string(depth, ' ') << "\n";
+		}else{
+			for(int i = 0; i < this->shape[depth]; i++){
+				out_stream << std::string(depth, ' ') << std::string(depth, ' ') << "{\n";
+				printerOverloadHelper(out_stream, index, depth+1);
+				out_stream << '\n' << std::string(depth, ' ') << std::string(depth, ' ') << "},\n";
+			}
+		}
+		// return out_stream
+	}
+
+	template <typename T>
+	void operator=(std::vector<T> &data){
+		int index = 0;
+		equalOverloadHelper(data, index);
+	}
+
+	void assign(int index, double *ptr){
+		assert(isView && "This is not a view\n");
+		this->data_ptr[index] = ptr;
 	}
 
 	/* destructor */
 	~valueData(){
 		delete data;
+		delete data_ptr;
 		delete grad;
 	}
 };
@@ -167,8 +234,8 @@ public:
 		ptr = std::make_shared<valueData>(_data,_label,_children,_op,__backward);
 	}
 
-	Value(std::vector<int> _shape,std::string _label = "",std::vector<std::shared_ptr<valueData>> _children = {},std::string _op = "",std::function<void()> __backward = nullptr){
-		ptr = std::make_shared<valueData>(_shape,_label,_children,_op,__backward);
+	Value(std::vector<int> _shape,std::string _label = "",std::vector<std::shared_ptr<valueData>> _children = {},std::string _op = "", bool isView = false, std::function<void()> __backward = nullptr){
+		ptr = std::make_shared<valueData>(_shape,_label,_children,_op,isView,__backward);
 	}
 
 	/* move constructor */
@@ -208,21 +275,34 @@ public:
 
 	Value operator=(double data) {
 		assert(this->ptr->shape.size() == 0 && "Shape conflict");
-		*(this->ptr->data) = data;
+		// *(this->ptr->data) = data;
+		(*this->ptr)[0] = data;
+		return *this;
+	}
+
+	template <typename T>
+	Value operator=(std::vector<T> &data){
+		(*this->ptr) = data;
+		return *this;
+	}
+
+	template <typename T>
+	Value operator=(std::vector<T> &&data){
+		(*this->ptr) = data;
 		return *this;
 	}
 
 	/* destructor */
 	~Value(){}
 
-	/* getter functions */
-	double* getdata(){
-		return this->ptr->data;
-	}
+	// /* getter functions */
+	// double* getdata(){
+	// 	return this->ptr->data;
+	// }
 
-	double* getGrad(){
-		return this->ptr->grad;
-	}
+	// double* getGrad(){
+	// 	return this->ptr->grad;
+	// }
 
 	Value operator()(std::vector<Selector> &&indexes);
 
