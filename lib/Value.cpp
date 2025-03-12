@@ -7,6 +7,7 @@
 
 
 std::ostream &operator<<(std::ostream &out_stream, valueData &obj) noexcept {
+
 	int index = 0;
 	obj.printerOverloadHelper(out_stream, index);
 	return out_stream;
@@ -15,14 +16,8 @@ std::ostream &operator<<(std::ostream &out_stream, valueData &obj) noexcept {
 /* for printing the Value object (right now implemented by overloading the
  * ostream << operator)*/
 std::ostream &operator<<(std::ostream &out_stream, Value &obj) noexcept {
-
-	// int size = obj.ptr->total_size;
-	// for(int i = 0; i < size; i++){
-	// 	out_stream << obj.ptr->label << " = " << (*obj.ptr)[i]
-	// 			<< " | grad = " << obj.ptr->grad[i] << std::endl;
-	// }
-	// return out_stream;
 	out_stream << (*obj.ptr);
+	
 	return out_stream;
 }
 
@@ -30,12 +25,6 @@ std::ostream &operator<<(std::ostream &out_stream, Value &obj) noexcept {
  * ostream << operator)*/
 std::ostream &operator<<(std::ostream &out_stream, Value &&obj) noexcept {
 
-	// int size = obj.ptr->total_size;
-	// for(int i = 0; i < size; i++){
-	// 	out_stream << obj.ptr->label << " = " << (*obj.ptr)[i]
-    //          << " | grad = " << obj.ptr->grad[i] << std::endl;
-	// }
-	// return out_stream;
 	out_stream << (*obj.ptr);
 	return out_stream;
 }
@@ -45,8 +34,6 @@ std::ostream &operator<<(std::ostream &out_stream, Value &&obj) noexcept {
 void iterator(std::vector<Selector> &indexes, int depth, int &index, int ori_index, int box_cap, std::vector<int> &res, std::vector<int> &ori_shape){
 
 	if(depth == indexes.size()){
-		// view.ptr->data[index++] = original.ptr->data[ori_index];
-		// res.push_back({index++, ori_index});
 		res.push_back(ori_index);
 		return;
 	}
@@ -109,8 +96,6 @@ Value Value::operator+(Value &other) {
 
 	Value out = Value(other.ptr->shape);
 	int size = out.ptr->total_size;
-	// std::transform(this->ptr->data, this->ptr->data + size, other.ptr->data,
-    //              out.ptr->data, [](double a, double b) { return a + b; });
 	for(int i = 0; i < size; i++){
 		(*out.ptr)[i] = (*this->ptr)[i] + (*other.ptr)[i];
 	}
@@ -144,8 +129,6 @@ Value Value::operator*(Value &other) {
 
 	Value out = Value(other.ptr->shape);
 	int size = out.ptr->total_size;
-	// std::transform(this->ptr->data, this->ptr->data + size, other.ptr->data,
-    //              out.ptr->data, [](double a, double b) { return a * b; });
 	for(int i = 0; i < size; i++){
 		(*out.ptr)[i] = (*this->ptr)[i] * (*other.ptr)[i];
 	}
@@ -155,10 +138,6 @@ Value Value::operator*(Value &other) {
 	out.ptr->_backward = [w_ptr = std::weak_ptr<valueData>(out.ptr), size]() {
 		std::shared_ptr<valueData> out_ptr = w_ptr.lock();
 		for (size_t index = 0; index < size; index++) {
-			// out_ptr->children[0]->grad[index] +=
-			// 		(out_ptr->children[1]->data[index]) * (out_ptr->grad[index]);
-			// out_ptr->children[1]->grad[index] +=
-			// 		(out_ptr->children[0]->data[index]) * (out_ptr->grad[index]);
 			out_ptr->children[0]->grad[index] +=
 					((*out_ptr->children[1])[index]) * (out_ptr->grad[index]);
 			out_ptr->children[1]->grad[index] +=
@@ -226,9 +205,6 @@ Value Value::operator^(Value &other) {
 
 	Value out = Value(other.ptr->shape);
 	int size = out.ptr->total_size;
-	// std::transform(this->ptr->data, this->ptr->data + size, other.ptr->data,
-	// 		 out.ptr->data,
-	// 		 [](double a, double b) { return std::pow(a, b); });
 	for(int i = 0; i < size; i++){
 		(*out.ptr)[i] = std::pow((*this->ptr)[i], (*other.ptr)[i]);
 	}
@@ -237,9 +213,6 @@ Value Value::operator^(Value &other) {
 	std::shared_ptr<valueData> out_ptr = out.ptr;
 	out.ptr->_backward = [w_ptr = std::weak_ptr<valueData>(out.ptr), size]() {
 		std::shared_ptr<valueData> out_ptr = w_ptr.lock();
-		std::cout << "This address1: " << &out_ptr << " " << out_ptr << '\n';
-		// double *this_data = (out_ptr->children[0]->data);
-		// double *other_data = (out_ptr->children[1]->data);
 		valueData this_data = *out_ptr->children[0];
 		valueData other_data = *out_ptr->children[1];
 

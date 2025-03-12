@@ -92,6 +92,10 @@ public:
 	}
 
 	void printerOverloadHelper(std::ostream &out_stream, int &index, int depth = 0){
+		if(this->shape.size() == 0){
+			out_stream << (*this)[0] << '\n';
+			return;
+		}
 		if(depth+1 == this->shape.size()){
 			out_stream << std::string(depth, ' ') << std::string(depth, ' ') << "[ ";
 			for(int i = 0; i < this->shape[depth]; i++){
@@ -105,7 +109,6 @@ public:
 				out_stream << '\n' << std::string(depth, ' ') << std::string(depth, ' ') << "},\n";
 			}
 		}
-		// return out_stream
 	}
 
 	template <typename T>
@@ -223,16 +226,6 @@ public:
 		}
 	}
 	
-	void printer(){
-		for(auto it: shape){
-			std::cout << it << " ";
-		}
-		std::cout << '\n';
-		for(int i = 0; i < n_elements; i++){
-			std::cout << t[i] << " ";
-		}
-	}
-
 	~Projection(){
 		delete t;
 	}
