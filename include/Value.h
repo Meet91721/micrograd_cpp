@@ -7,6 +7,19 @@
 #include <numeric>
 #include <cassert>
 
+template <size_t N>
+struct MultidimVector{
+	using type = std::vector<typename MultidimVector<N-1>::type>;
+};
+
+template <>
+struct MultidimVector<1>{
+	using type = std::vector<double>;
+};
+
+template <size_t N>
+using T = typename MultidimVector<N>::type;
+
 class Value;
 
 class valueData{
@@ -118,11 +131,13 @@ struct Selector{
 	int *indexes;
 	int n_elements;
 	bool isRange;
+	bool isSingle;
 	Selector(int index){
 		indexes = new int[1];
 		indexes[0] = index;
 		n_elements = 1;
 		isRange = false;
+		isSingle = true;
 	}
 	Selector(std::initializer_list<int> range){
 		assert(range.size() == 2 && "Range only accepts the first and last element");
@@ -130,17 +145,20 @@ struct Selector{
 		std::copy(range.begin(), range.end(), indexes);
 		n_elements = indexes[1] - indexes[0];
 		isRange = true;
+		isSingle = false;
 	}
 	Selector(int n, std::initializer_list<int> elems){
 		indexes = new int[n];
 		std::copy(elems.begin(), elems.end(), indexes);
 		n_elements = n;
 		isRange = false;
+		isSingle = false;
 	}
 	Selector(Selector &&sel) noexcept {
 		indexes = sel.indexes;
 		isRange = sel.isRange;
 		n_elements = sel.n_elements;
+		isSingle = sel.isSingle;
 		sel.indexes = nullptr;
 	}
 	Selector& operator()(Selector &&other) noexcept {
@@ -148,6 +166,7 @@ struct Selector{
 		indexes = other.indexes;
 		isRange = other.isRange;
 		n_elements = other.n_elements;
+		isSingle = other.isSingle;
 		other.indexes = nullptr;
 		return *this;
 	}
