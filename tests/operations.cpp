@@ -7,8 +7,8 @@ TEST(addTest, basicTests) {
 
   GTEST_LOG_(INFO) << "add test started\n";
 
-  Value a(2, "a");
-  Value b(3, "b");
+  Value a(2);
+  Value b(3);
   Value c = std::move(a + b);
 
   /* EXPECT_EQ(c.data,5.0);

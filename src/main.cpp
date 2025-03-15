@@ -2,24 +2,22 @@
 
 int main()
 {
-	Value a = Value({1, 2, 3}, "a");
-	a = T<3>{
-		{
-			{
-				{1, 2, 3}
-			},
-			{
-				{5, 12, 23}
-			}
-		}
-	};
-	std::cout << "This one here: " << a({0,0,0}) << '\n';
-	a({0,0,0}) = T<3>{
-		{
-			{
-				312
-			}
-		}
-	};
+	// T<3> v = {{{1, 2}, {3, 4}}};
+	// Value a = Value(v);
+	// Value a = Value(T<2> {
+	// 	{1, 2, 3},
+	// 	{6, 5, 4}
+	// });
+	Value a = Value(2);
+	Value b = Value(33);
+
+
+	// Value a = Value(21);
 	std::cout << a;
+	std::cout << b;
+	Value c = a * b;
+	c.backward();
+	std::cout << *(a.ptr->grad) << '\n';
+	std::cout << *(b.ptr->grad) << '\n';
+	std::cout << *(c.ptr->grad) << '\n';
 }

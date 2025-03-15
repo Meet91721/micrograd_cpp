@@ -67,21 +67,21 @@ Value Value::operator()(std::vector<Selector> &&indexes){
 
 	assert(indexes.size() == this->ptr->shape.size() && "Incorrect shape demanded");
 	std::vector<int>shape;
+	int size = 1;
 	for(int i = 0; i < indexes.size(); i++){
 		indexes[i].isValid(this->ptr->shape[i]);
 		shape.push_back(indexes[i].n_elements);
+		size *= indexes[i].n_elements;
 	}
-	Value out = Value(shape, "", {}, "", true);
-	int size = out.ptr->total_size;
-
+	// Value out = Value(shape, "", {}, "", true);
+	Value out = Value(size, shape, "view", true);
+	// int size = out.ptr->total_size;
 	std::vector<int> mappings = viewCreator(*this, out, indexes);
 	for(int i = 0; i < mappings.size(); i++){
 		out.ptr->assign(i, (*this->ptr) + mappings[i]);
 	}
-
 	out.ptr->children = {this->ptr};
-	out.ptr->op = "view";
-
+	// out.ptr->op = "view";
 	out.ptr->_backward = [w_ptr = std::weak_ptr<valueData>(out.ptr), size, mappings](){
 		std::shared_ptr<valueData> out_ptr = w_ptr.lock();
 		for(int i = 0; i < size; i++){
@@ -94,13 +94,12 @@ Value Value::operator()(std::vector<Selector> &&indexes){
 // addition
 Value Value::operator+(Value &other) {
 
-	Value out = Value(other.ptr->shape);
+	Value out = Value(other.ptr->total_size, other.ptr->shape, "+");
 	int size = out.ptr->total_size;
 	for(int i = 0; i < size; i++){
 		(*out.ptr)[i] = (*this->ptr)[i] + (*other.ptr)[i];
 	}
 	out.ptr->children = {this->ptr, other.ptr};
-	out.ptr->op = "+";
 	out.ptr->_backward = [w_ptr = std::weak_ptr<valueData>(out.ptr), size]() {
 		std::shared_ptr<valueData> out_ptr = w_ptr.lock();
 		for (int i = 0; i < size; i++) {
@@ -127,14 +126,12 @@ Value operator+(double val, Value &other) {
 // multiplication
 Value Value::operator*(Value &other) {
 
-	Value out = Value(other.ptr->shape);
+	Value out = Value(other.ptr->total_size, other.ptr->shape, "*");
 	int size = out.ptr->total_size;
 	for(int i = 0; i < size; i++){
 		(*out.ptr)[i] = (*this->ptr)[i] * (*other.ptr)[i];
 	}
-	out.ptr->label = "*";
 	out.ptr->children = {this->ptr, other.ptr};
-	std::shared_ptr<valueData> out_ptr = out.ptr;
 	out.ptr->_backward = [w_ptr = std::weak_ptr<valueData>(out.ptr), size]() {
 		std::shared_ptr<valueData> out_ptr = w_ptr.lock();
 		for (size_t index = 0; index < size; index++) {
@@ -203,19 +200,17 @@ Value operator/(double val, Value &other) {
 // power
 Value Value::operator^(Value &other) {
 
-	Value out = Value(other.ptr->shape);
+	// Value out = Value(other.ptr->shape);
+	Value out = Value(other.ptr->total_size, other.ptr->shape, "*");
 	int size = out.ptr->total_size;
 	for(int i = 0; i < size; i++){
 		(*out.ptr)[i] = std::pow((*this->ptr)[i], (*other.ptr)[i]);
 	}
-	out.ptr->label = "^";
 	out.ptr->children = {this->ptr, other.ptr};
-	std::shared_ptr<valueData> out_ptr = out.ptr;
 	out.ptr->_backward = [w_ptr = std::weak_ptr<valueData>(out.ptr), size]() {
 		std::shared_ptr<valueData> out_ptr = w_ptr.lock();
 		valueData this_data = *out_ptr->children[0];
 		valueData other_data = *out_ptr->children[1];
-
 		for (size_t index = 0; index < size; index++) {
 			out_ptr->children[0]->grad[index] +=
 				  (std::pow(this_data[index], other_data[index]) * other_data[index] /

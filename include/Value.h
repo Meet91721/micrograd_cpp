@@ -6,6 +6,7 @@
 #include <iostream>
 #include <numeric>
 #include <cassert>
+#include <type_traits>
 
 template <size_t N>
 struct MultidimVector{
@@ -20,7 +21,6 @@ struct MultidimVector<1>{
 template <size_t N>
 using T = typename MultidimVector<N>::type;
 
-class Value;
 
 class valueData{
 
@@ -31,7 +31,6 @@ private:
 public:
 	int total_size;
 	std::vector<int> shape;
-	std::string label;
 	std::vector<std::shared_ptr<valueData>> children;
 	double *grad;
 	std::function<void()>_backward;
@@ -41,18 +40,44 @@ public:
 	/* explicitly deleting the default constructor */
 	valueData() = delete;
 
-	/* main constructor */
-	valueData(double _data,std::string _label = "",std::vector<std::shared_ptr<valueData>> _children = {},std::string _op = "",std::function<void()> __backward = nullptr):label(std::move(_label)),children(std::move(_children)),op(std::move(_op)),_backward(__backward) {
-		total_size = 1;
-		data = new double(_data);
-		data_ptr = nullptr;
-		isView = false;
-		grad = new double(0);
-		shape = {};
+	void tensor_iterator(const T<1> &_data, std::vector<int> &shape){
+		shape.push_back(_data.size());
 	}
 
-	valueData(std::vector<int> _shape,std::string _label = "",std::vector<std::shared_ptr<valueData>> _children = {},std::string _op = "", bool isView = false,std::function<void()> __backward = nullptr):label(std::move(_label)),children(std::move(_children)),op(std::move(_op)),_backward(__backward),isView(isView) {
-		total_size = std::accumulate(_shape.begin(), _shape.end(), 1, std::multiplies<int>());
+	template <typename TensorType>
+	void tensor_iterator(TensorType _data, std::vector<int> &shape){
+		if constexpr (std::is_convertible_v<TensorType, double> == false){
+			shape.push_back(_data.size());
+			tensor_iterator(_data[0], shape);
+		}
+	}
+	
+	template <typename TensorType>
+	valueData(TensorType _data, std::string _op = ""){
+		if constexpr (std::is_convertible_v<TensorType, double>){
+			data = new double(_data);
+			data_ptr = nullptr;
+			total_size = 1;
+			shape = {};
+			grad = new double(0);
+			op = _op;
+			isView = false;
+		}else{
+			tensor_iterator(_data, shape);
+			total_size = std::accumulate(shape.begin(), shape.end(), 1, std::multiplies<int>());
+			data = new double[total_size];
+			data_ptr = nullptr;
+			int _index = 0;
+			equalOverloadHelper(_data, _index);
+			grad = new double[total_size];
+			op = _op;
+			isView = false;
+		}
+	}
+
+	/* Constructor for operation yields */
+	valueData(int _total_size, std::vector<int> _shape, std::string _op, bool isView = false){
+		total_size = _total_size;
 		if(isView){
 			data = nullptr;
 			data_ptr = new double*[total_size];
@@ -63,6 +88,7 @@ public:
 		}
 		grad = new double[total_size];
 		shape = _shape;
+		op = _op;
 	}
 
 	double& operator[](int index){
@@ -83,8 +109,8 @@ public:
 		}
 	}
 
-	template <typename T>
-	void equalOverloadHelper(std::vector<T> &data, int &index, int depth=0){
+	template <typename Type>
+	void equalOverloadHelper(std::vector<Type> &data, int &index, int depth=0){
 		assert(this->shape[depth] == data.size() && "The shape does not match\n");
 		for(int i = 0; i < data.size(); i++){
 			equalOverloadHelper(data[i], index, depth+1);
@@ -111,8 +137,8 @@ public:
 		}
 	}
 
-	template <typename T>
-	void operator=(std::vector<T> &data){
+	template <typename Type>
+	void operator=(std::vector<Type> &data){
 		int index = 0;
 		equalOverloadHelper(data, index);
 	}
@@ -235,6 +261,10 @@ class Value{
 private:
 	inline static std::vector<std::shared_ptr<valueData>> tmpObjs;
 
+	Value(int _total_size, std::vector<int> _shape, std::string _op, bool _isView = false){
+		ptr = std::make_shared<valueData>(_total_size, _shape, _op, _isView);
+	}
+
 public:
 	std::shared_ptr<valueData> ptr;
 
@@ -242,14 +272,13 @@ public:
 	Value() = delete;
 
 	/* main constructor */
-	Value(double _data,std::string _label = "",std::vector<std::shared_ptr<valueData>> _children = {},std::string _op = "",std::function<void()> __backward = nullptr){
-		ptr = std::make_shared<valueData>(_data,_label,_children,_op,__backward);
+	template <typename DataType>
+	Value(const DataType &_data){
+		ptr = std::make_shared<valueData>(_data);
 	}
-
-	Value(std::vector<int> _shape,std::string _label = "",std::vector<std::shared_ptr<valueData>> _children = {},std::string _op = "", bool isView = false, std::function<void()> __backward = nullptr){
-		ptr = std::make_shared<valueData>(_shape,_label,_children,_op,isView,__backward);
+	Value(double _data){
+		ptr = std::make_shared<valueData>(_data);
 	}
-
 	/* move constructor */
 	Value(Value&& other){
 		this->ptr = other.ptr;
@@ -292,14 +321,14 @@ public:
 		return *this;
 	}
 
-	template <typename T>
-	Value operator=(std::vector<T> &data){
+	template <typename Type>
+	Value operator=(std::vector<Type> &data){
 		(*this->ptr) = data;
 		return *this;
 	}
 
-	template <typename T>
-	Value operator=(std::vector<T> &&data){
+	template <typename Type>
+	Value operator=(std::vector<Type> &&data){
 		(*this->ptr) = data;
 		return *this;
 	}
